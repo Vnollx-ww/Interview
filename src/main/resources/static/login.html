@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户登录</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" rel="stylesheet">
+    <style>
+        /* 自定义Toast样式（适配浅色背景） */
+        .toast {
+            position: fixed;
+            top: 2rem;
+            right: 2rem;
+            padding: 1rem 1.5rem;
+            border-radius: 0.5rem;
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: all 0.3s ease;
+            z-index: 1000;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .toast-success {
+            background-color: #e0f2f1;  /* 浅绿松色（适配浅色背景） */
+            color: #00695c;            /* 深绿松色 */
+            border-left: 4px solid #00897b; /* 亮绿松色 */
+        }
+        .toast-error {
+            background-color: #f8d7da;  /* 浅粉红（适配浅色背景） */
+            color: #721c24;            /* 深红 */
+            border-left: 4px solid #dc3545; /* 亮红 */
+        }
+        .toast-show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-white to-blue-100 flex items-center justify-center p-4">
+<!-- 登录卡片 -->
+<div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
+    <div class="text-center mb-6">
+        <h1 class="text-3xl font-bold text-gray-900">用户登录</h1>
+        <p class="text-gray-500 mt-2">欢迎回到系统，请输入账户和密码</p>
+    </div>
+
+    <form id="loginForm" class="space-y-4">
+        <!-- 账户输入 -->
+        <div>
+            <label for="account" class="block text-sm font-medium text-gray-700">账户</label>
+            <div class="mt-1 relative">
+                <input
+                        type="text"
+                        id="account"
+                        name="account"
+                        class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                        placeholder="请输入账号"
+                        required
+                >
+                <span class="absolute right-3 top-3 text-gray-400">
+                        <i class="fas fa-user"></i>
+                    </span>
+            </div>
+        </div>
+
+        <!-- 密码输入 -->
+        <div>
+            <label for="password" class="block text-sm font-medium text-gray-700">密码</label>
+            <div class="mt-1 relative">
+                <input
+                        type="password"
+                        id="password"
+                        name="password"
+                        class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                        placeholder="请输入登录密码"
+                        required
+                >
+                <span class="absolute right-3 top-3 text-gray-400">
+                        <i class="fas fa-lock"></i>
+                    </span>
+            </div>
+        </div>
+
+        <!-- 提交按钮 -->
+        <div>
+            <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors">
+                立即登录
+            </button>
+        </div>
+    </form>
+    <div class="text-center mt-4">
+        <p class="text-gray-500">
+            没有账号？
+            <a href="register.html" class="text-indigo-600 font-medium hover:text-indigo-700 transition-colors">
+                立即注册
+            </a>
+        </p>
+    </div>
+</div>
+
+
+<script>
+    // Toast提示函数（逻辑不变）
+    function showToast(message, type) {
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type} toast-show`;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => {
+            toast.classList.remove('toast-show');
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
+
+    // 表单提交处理（逻辑不变）
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const account = document.getElementById('account').value;
+        const password = document.getElementById('password').value;
+        if (!account || !password) {
+            showToast('请填写完整的账号和密码', 'error');
+            return;
+        }
+        try {
+            const formdata=new FormData();
+            formdata.append('account',account);
+            formdata.append('password',password);
+            const response = await fetch('/user/login', {
+                method: 'POST',
+                body: formdata
+            });
+            const result = await response.json();
+            if (result.code === 200) {
+                localStorage.setItem('token', result.data);
+                showToast('登录成功！', 'success');
+                setTimeout(() => window.location.href = '/index.html', 2000);
+            } else {
+                showToast(result.msg || '登录失败，请检查账户密码', 'error');
+            }
+        } catch (error) {
+            showToast('网络请求失败，请稍后再试', 'error');
+        }
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>商品详情</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+
+        .loading-spinner {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .action-btn {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-origin: center;
+        }
+        .action-btn:active {
+            transform: scale(0.95);
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.85);
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 0.5rem;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+        .toast.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .cart-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            padding: 1rem;
+            backdrop-filter: blur(2px);
+        }
+        .cart-modal {
+            background: white;
+            width: 100%;
+            max-width: 500px;
+            border-radius: 1rem;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .cart-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .cart-item {
+            padding: 1.5rem;
+            display: grid;
+            grid-template-columns: 60px 1fr 40px;
+            gap: 1.5rem;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .cart-item:last-child {
+            border-bottom: none;
+        }
+        .cart-item-thumbnail {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 0.5rem;
+            background: #f3f4f6;
+        }
+        .cart-empty {
+            padding: 2rem;
+            text-align: center;
+            color: #6b7280;
+            font-size: 0.875rem;
+        }
+        /* 新增数量调整按钮样式 */
+        .quantity-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.25rem;
+        }
+        .quantity-btn {
+            padding: 0.25rem 0.5rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.375rem;
+            background: white;
+            transition: all 0.2s;
+        }
+        .quantity-btn:hover {
+            background: #f3f4f6;
+        }
+        .quantity-value {
+            padding: 0.25rem 0.75rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.375rem;
+            min-width: 2.5rem;
+            text-align: center;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+<div id="toast" class="toast"></div>
+
+<div id="cartModal" class="cart-modal-overlay" onclick="closeCartModal(event)">
+    <div class="cart-modal" onclick="event.stopPropagation()">
+        <div class="cart-header">
+            <h2 class="text-xl font-bold text-gray-900">我的购物车</h2>
+            <button onclick="closeCartModal()" class="action-btn text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times text-lg"></i>
+            </button>
+        </div>
+        <div id="cartItems">
+            <div id="cartLoading" class="text-center p-4">
+                <i class="fas fa-circle-notch loading-spinner text-blue-500 text-2xl"></i>
+            </div>
+            <div id="cartContent" class="hidden"></div>
+            <!-- 总价格区域 -->
+            <div id="cartTotal" class="p-4 border-t border-gray-200 hidden">
+                <div class="flex justify-between items-center">
+                    <span class="text-sm font-medium text-gray-600">合计：</span>
+                    <span id="totalPrice" class="text-lg font-bold text-gray-900">¥0.00</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<button id="cartIconBtn" onclick="openCartModal()"
+        class="action-btn fixed bottom-6 right-6 bg-blue-500 text-white p-3 rounded-full shadow-lg hover:bg-blue-600 transition-colors">
+    <i class="fas fa-shopping-cart text-2xl"></i>
+    <span id="cartItemCount" class="absolute top-0 right-0 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full -mt-1 -mr-1 hidden"></span>
+</button>
+
+<div class="container mx-auto px-4 py-8 max-w-3xl">
+    <div class="bg-white rounded-xl shadow-md overflow-hidden transition-all duration-300 hover:shadow-lg">
+        <div id="loading" class="text-center p-12 space-y-4">
+            <div class="inline-flex items-center justify-center">
+                <i class="fas fa-circle-notch loading-spinner text-3xl text-blue-500"></i>
+            </div>
+            <p class="text-gray-500 text-sm">正在加载商品信息...</p>
+        </div>
+
+        <div id="productInfo" class="hidden p-6 md:p-8">
+            <input type="hidden" id="productId" th:value="${product.product_id}">
+            <input type="hidden" id="initialLikeCount" th:value="${product.like_count}">
+
+            <h1 id="productName" class="text-3xl font-bold text-gray-900" th:text="${product.name}"></h1>
+
+            <div class="flex items-baseline space-x-2 mt-4">
+                <span class="text-2xl font-bold text-red-500">¥</span>
+                <span id="productPrice" class="text-3xl font-bold text-red-500" th:text="${product.price}"></span>
+            </div>
+
+            <div class="flex flex-col md:flex-row gap-3 mt-6">
+                <button id="likeBtn" onclick="toggleLike()"
+                        class="action-btn inline-flex items-center px-6 py-3 border rounded-full transition-colors flex-1">
+                    <i class="fas fa-thumbs-up text-lg mr-2"></i>
+                    <span id="likeText" class="font-medium">点赞</span>
+                    <span id="likeCount" class="ml-1 text-sm">（<span th:text="${product.like_count}">0</span>）</span>
+                </button>
+
+                <button id="addToCartBtn" onclick="addToCart()"
+                        class="action-btn inline-flex items-center px-6 py-3 bg-blue-500 text-white border border-blue-500 rounded-full transition-colors hover:bg-blue-600 flex-1">
+                    <i class="fas fa-shopping-cart text-lg mr-2"></i>
+                    <span class="font-medium">加入购物车</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function showToast(message) {
+        const toast = document.getElementById('toast');
+        toast.textContent = message;
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    const token = localStorage.getItem('token');
+    const cartId = localStorage.getItem('cart_id');
+    let productId = null;
+    let isLiked = false;
+    let currentLikeCount = 0;
+    let cartItems = [];
+
+    window.onload = async () => {
+        productId = document.getElementById('productId').value;
+        currentLikeCount = parseInt(document.getElementById('initialLikeCount').value, 10);
+        updateCartIconCount();
+
+        if (!productId) {
+            showToast('商品信息加载失败，请刷新重试');
+            return;
+        }
+
+        try {
+            showLoading(true);
+            const formdata = new FormData();
+            formdata.append('token', token);
+            formdata.append('product_id', productId);
+            const response = await fetch('/product/judgelike', { method: 'POST', body: formdata });
+            const { code, data } = await response.json();
+            if (code === 200) renderLikeStatus(data);
+            else showToast('加载点赞状态失败');
+        } catch (error) {
+            console.error('加载错误:', error);
+            showToast('网络请求异常，请检查连接');
+        } finally {
+            showLoading(false);
+        }
+    };
+
+    function showLoading(show) {
+        document.getElementById('loading').style.display = show ? 'block' : 'none';
+        document.getElementById('productInfo').style.display = show ? 'none' : 'block';
+    }
+
+    function renderLikeStatus(likeStatus) {
+        isLiked = likeStatus === 1;
+        const likeBtn = document.getElementById('likeBtn');
+        likeBtn.className = `action-btn inline-flex items-center px-6 py-3 border rounded-full transition-colors flex-1 ${
+            isLiked ? 'bg-red-50 text-red-600 border-red-100 hover:bg-red-100' : 'bg-gray-50 text-gray-600 border-gray-100 hover:bg-gray-100'
+        }`;
+        likeBtn.querySelector('#likeText').textContent = isLiked ? '已点赞' : '点赞';
+    }
+
+    async function toggleLike() {
+        if (!token) {
+            showToast('请先登录以进行点赞');
+            setTimeout(() => window.location.href = '/login.html', 1500);
+            return;
+        }
+
+        try {
+            const formdata = new FormData();
+            formdata.append('token', token);
+            formdata.append('product_id', productId);
+            formdata.append('option', !isLiked);
+            formdata.append('name',document.getElementById('productName').textContent);
+            const response = await fetch('/product/like', { method: 'POST', body: formdata });
+            const { code, data } = await response.json();
+            if (code === 200) {
+                currentLikeCount = isLiked ? currentLikeCount - 1 : currentLikeCount + 1;
+                isLiked = !isLiked;
+                document.getElementById('likeCount').querySelector('span').textContent = currentLikeCount;
+                renderLikeStatus(isLiked ? 1 : 0);
+                showToast(isLiked ? '点赞成功！' : '已取消点赞');
+            } else {
+                showToast(data.msg || '操作失败，请重试');
+            }
+        } catch (error) {
+            console.error('点赞错误:', error);
+            showToast('网络请求异常，请重试');
+        }
+    }
+
+    async function addToCart() {
+        const addBtn = document.getElementById('addToCartBtn');
+        const originalText = addBtn.innerHTML;
+
+        try {
+            if (!token) {
+                showToast('请先登录以使用购物车');
+                setTimeout(() => window.location.href = '/login.html', 1500);
+                return;
+            }
+            if (!cartId) {
+                showToast('未找到购物车ID，请刷新页面');
+                return;
+            }
+
+            addBtn.disabled = true;
+            addBtn.innerHTML = `
+                    <i class="fas fa-spinner loading-spinner text-lg mr-2"></i>
+                    <span class="font-medium">添加中...</span>
+                `;
+
+            const formdata = new FormData();
+            formdata.append('token', token);
+            formdata.append('cart_id', cartId);
+            formdata.append('product_id', productId);
+            formdata.append('price',document.getElementById('productPrice').textContent);
+            formdata.append('product_name',document.getElementById('productName').textContent);
+
+            const response = await fetch('/cart/addproduct', { method: 'POST', body: formdata });
+            const { code, msg } = await response.json();
+
+            if (code === 200) {
+                showToast('商品已加入购物车');
+                loadCartItems();
+            } else {
+                showToast(msg || '添加失败，请重试');
+            }
+        } catch (error) {
+            console.error('加入购物车错误:', error);
+            showToast('网络请求异常，请重试');
+        } finally {
+            addBtn.disabled = false;
+            addBtn.innerHTML = originalText;
+        }
+    }
+
+    function openCartModal() {
+        document.getElementById('cartModal').style.display = 'flex';
+        loadCartItems();
+    }
+
+    function closeCartModal(event) {
+        if (!event || event.target === document.getElementById('cartModal')) {
+            document.getElementById('cartModal').style.display = 'none';
+        }
+    }
+
+    async function loadCartItems() {
+        const cartContent = document.getElementById('cartContent');
+        const cartLoading = document.getElementById('cartLoading');
+        const cartTotal = document.getElementById('cartTotal');
+
+        cartLoading.classList.remove('hidden');
+        cartContent.classList.add('hidden');
+        cartContent.innerHTML = '';
+        cartTotal.classList.add('hidden');
+
+        try {
+            if (!token || !cartId) {
+                cartContent.innerHTML = `<div class="cart-empty">请先登录并创建购物车</div>`;
+                return;
+            }
+
+            const formdata = new FormData();
+            formdata.append('token', token);
+            formdata.append('cart_id', cartId);
+            const response = await fetch('/cart/get', { method: 'POST', body: formdata });
+            const { code, data } = await response.json();
+
+            if (code === 200) {
+                cartItems = data || [];
+                renderCartItems();
+                updateCartIconCount();
+                cartTotal.classList.remove('hidden');
+            } else {
+                cartContent.innerHTML = `<div class="cart-empty">${data.msg || '加载购物车失败'}</div>`;
+            }
+        } catch (error) {
+            console.error('加载购物车错误:', error);
+            cartContent.innerHTML = `<div class="cart-empty">网络请求异常，请重试</div>`;
+        } finally {
+            cartLoading.classList.add('hidden');
+            cartContent.classList.remove('hidden');
+            updateTotalPrice();
+        }
+    }
+
+    function renderCartItems() {
+        const cartContent = document.getElementById('cartContent');
+        if (cartItems.length === 0) {
+            cartContent.innerHTML = `<div class="cart-empty">购物车为空</div>`;
+            updateTotalPrice();
+            return;
+        }
+
+        const itemsHtml = cartItems.map(item => `
+                <div class="cart-item">
+                    <img src="https://picsum.photos/60/60?${item.product_id}"
+                         alt="${item.name}"
+                         class="cart-item-thumbnail">
+                    <div class="space-y-1">
+                        <p class="text-sm font-medium">${item.name}</p>
+                        <p class="text-xs text-gray-500">单价：¥${item.price}</p>
+                        <div class="quantity-controls">
+                            <button onclick="decrementQuantity('${item.product_id}')"
+                                    class="quantity-btn action-btn">
+                                <i class="fas fa-minus"></i>
+                            </button>
+                            <span class="quantity-value">${item.quantity}</span>
+                            <button onclick="incrementQuantity('${item.product_id}')"
+                                    class="quantity-btn action-btn">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <button onclick="deleteCartItem('${item.product_id}')"
+                            class="action-btn text-red-500 hover:text-red-700">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
+            `).join('');
+
+        cartContent.innerHTML = itemsHtml;
+        updateTotalPrice();
+    }
+
+    async function incrementQuantity(productId) {
+        const item = cartItems.find(item => item.product_id === productId);
+        if (!item) return;
+
+        item.quantity += 1;
+        await updateCartQuantity(productId, 1);
+    }
+
+    async function decrementQuantity(productId) {
+        const item = cartItems.find(item => item.product_id === productId);
+        if (!item || item.quantity <= 1) return;
+
+        item.quantity -= 1;
+        await updateCartQuantity(productId, -1);
+    }
+
+    async function updateCartQuantity(productId, quantity) {
+        try {
+            const formdata = new FormData();
+            formdata.append('token', token);
+            formdata.append('cart_id', cartId);
+            formdata.append('product_id', productId);
+            formdata.append('quantity', quantity);
+
+            const response = await fetch('/cart/updatequantity', { method: 'POST', body: formdata });
+            const { code, msg } = await response.json();
+
+            if (code === 200) {
+                renderCartItems();
+                updateCartIconCount();
+            } else {
+                const item = cartItems.find(item => item.product_id === productId);
+                item.quantity = Math.max(item.quantity, 1); // 恢复本地数量
+                renderCartItems();
+                showToast(msg || '数量更新失败，请重试');
+            }
+        } catch (error) {
+            console.error('更新数量错误:', error);
+            const item = cartItems.find(item => item.product_id === productId);
+            item.quantity = Math.max(item.quantity, 1); // 恢复本地数量
+            renderCartItems();
+            showToast('网络请求异常，请重试');
+        }
+    }
+
+    function updateTotalPrice() {
+        const total = cartItems.reduce((sum, item) => sum + (Number(item.price) * item.quantity), 0);
+        document.getElementById('totalPrice').textContent = `¥${total.toFixed(2)}`;
+    }
+
+    async function deleteCartItem(productId) {
+        try {
+            const formdata = new FormData();
+            formdata.append('token', token);
+            formdata.append('cart_id', cartId);
+            formdata.append('product_id', productId);
+            const response = await fetch('/cart/deleteproduct', { method: 'POST', body: formdata });
+            const { code, msg } = await response.json();
+
+            if (code === 200) {
+                showToast('已移除商品');
+                cartItems = cartItems.filter(item => item.product_id !== productId);
+                renderCartItems();
+                updateCartIconCount();
+            } else {
+                showToast(msg || '删除失败，请重试');
+            }
+        } catch (error) {
+            console.error('删除商品错误:', error);
+            showToast('网络请求异常，请重试');
+        }
+    }
+
+    function updateCartIconCount() {
+        const countEl = document.getElementById('cartItemCount');
+        const total = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+        countEl.textContent = total;
+        countEl.classList.toggle('hidden', total === 0);
+    }
+</script>
+</body>
+</html>
